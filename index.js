@@ -11,6 +11,7 @@ import {
     PermissionsBitField,
 } from "discord.js";
 import { Sequelize, DataTypes } from "sequelize";
+import axios from "axios";
 import dotenv from "dotenv";
 
 dotenv.config();
@@ -24,7 +25,7 @@ app.get("/", (req, res) => {
 });
 
 app.listen(PORT, () => {
-    console.log(`Servidor HTTP rodando na porta ${PORT}`);
+    console.log(`🌍 Servidor HTTP rodando na porta ${PORT}`);
 });
 
 // Criar cliente do bot
@@ -52,7 +53,7 @@ const Whitelist = sequelize.define("Whitelist", {
 
 client.once("ready", async () => {
     await sequelize.sync();
-    console.log(`Bot online como ${client.user.tag}`);
+    console.log(`✅ Bot online como ${client.user.tag}`);
 
     // Enviar o botão de Whitelist automaticamente no canal correto
     const channel = await client.channels.fetch("1338158040767139923").catch(console.error);
@@ -80,19 +81,31 @@ const CHANNEL_WL_RESULTS = "1338158706810159134";
 const CHANNEL_KEEP_ALIVE = "1338192023244509195"; // Canal para Keep-Alive
 const ROLE_MEMBER = "1336379079494205521";
 
-// Keep-Alive: Envia uma mensagem a cada 2 minutos no canal especificado
+// Keep-Alive: Envia uma mensagem a cada 2 minutos no canal especificado e faz um ping HTTP para o próprio bot
 let keepAliveMessage;
 
 async function keep_alive_loop() {
     setInterval(async () => {
-        const channel = await client.channels.fetch(CHANNEL_KEEP_ALIVE).catch(console.error);
-        if (channel) {
-            if (keepAliveMessage) {
-                keepAliveMessage.edit("✅ Bot ativo! (Keep-Alive)").catch(console.error);
-            } else {
-                keepAliveMessage = await channel.send("✅ Bot ativo! (Keep-Alive)").catch(console.error);
+        // Manter mensagem no canal de logs
+        try {
+            const channel = await client.channels.fetch(CHANNEL_KEEP_ALIVE).catch(console.error);
+            if (channel) {
+                if (keepAliveMessage) {
+                    await keepAliveMessage.edit("✅ Bot ativo! (Keep-Alive)").catch(console.error);
+                } else {
+                    keepAliveMessage = await channel.send("✅ Bot ativo! (Keep-Alive)").catch(console.error);
+                }
+                console.log("✅ Keep-Alive enviado no Discord!");
             }
+        } catch (error) {
+            console.error("❌ Erro ao enviar Keep-Alive no Discord:", error);
         }
+
+        // Ping no próprio servidor para evitar hibernação no Render
+        axios.get("https://seu-bot.onrender.com/")
+            .then(() => console.log("🔄 Keep-Alive no Render funcionando!"))
+            .catch((err) => console.error("Erro no Keep-Alive HTTP:", err));
+
     }, 120000); // A cada 2 minutos (120000 ms)
 }
 
