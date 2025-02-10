@@ -1,21 +1,17 @@
 {
   "name": "botwl",
   "version": "1.0.0",
+  "description": "Bot de Whitelist para o Discord",
   "main": "index.js",
+  "type": "module",
   "scripts": {
-    "scripts": {
-  "start": "node index.js",
-  "postinstall": "npm install"
-    }
-    "start": "node index.js",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "start": "node index.js"
   },
-  "keywords": [],
-  "author": "",
-  "license": "ISC",
-  "description": "",
   "dependencies": {
     "discord.js": "^14.17.3",
-    "dotenv": "^16.4.7"
+    "dotenv": "^16.4.7",
+    "express": "^4.18.2",
+    "sequelize": "^6.37.5",
+    "sqlite3": "^5.1.7"
   }
 }
