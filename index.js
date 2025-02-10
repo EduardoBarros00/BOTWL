@@ -1,3 +1,4 @@
+import express from "express";
 import {
     Client,
     GatewayIntentBits,
@@ -14,6 +15,19 @@ import dotenv from "dotenv";
 
 dotenv.config();
 
+// Criar servidor Express para evitar erro de "Port Scan Timeout" na Render
+const app = express();
+const PORT = process.env.PORT || 3000;
+
+app.get("/", (req, res) => {
+    res.send("Bot está rodando!");
+});
+
+app.listen(PORT, () => {
+    console.log(`Servidor HTTP rodando na porta ${PORT}`);
+});
+
+// Criar cliente do bot
 const client = new Client({
     intents: [
         GatewayIntentBits.Guilds,
@@ -41,7 +55,7 @@ client.once("ready", async () => {
     console.log(`Bot online como ${client.user.tag}`);
 
     // Enviar o botão de Whitelist automaticamente no canal correto
-    const channel = await client.channels.fetch("1338158040767139923");
+    const channel = await client.channels.fetch("1338158040767139923").catch(console.error);
     if (channel) {
         const row = new ActionRowBuilder().addComponents(
             new ButtonBuilder()
@@ -67,13 +81,17 @@ const CHANNEL_KEEP_ALIVE = "1338192023244509195"; // Canal para Keep-Alive
 const ROLE_MEMBER = "1336379079494205521";
 
 // Keep-Alive: Envia uma mensagem a cada 2 minutos no canal especificado
+let keepAliveMessage;
+
 async function keep_alive_loop() {
     setInterval(async () => {
-        const channel = await client.channels.fetch(CHANNEL_KEEP_ALIVE);
+        const channel = await client.channels.fetch(CHANNEL_KEEP_ALIVE).catch(console.error);
         if (channel) {
-            await channel
-                .send("✅ Bot ativo! (Keep-Alive)")
-                .catch(console.error);
+            if (keepAliveMessage) {
+                keepAliveMessage.edit("✅ Bot ativo! (Keep-Alive)").catch(console.error);
+            } else {
+                keepAliveMessage = await channel.send("✅ Bot ativo! (Keep-Alive)").catch(console.error);
+            }
         }
     }, 120000); // A cada 2 minutos (120000 ms)
 }
@@ -168,4 +186,5 @@ client.on("interactionCreate", async (interaction) => {
     }
 });
 
+// Logar o bot
 client.login(process.env.TOKEN);
