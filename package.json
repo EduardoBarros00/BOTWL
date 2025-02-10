@@ -14,7 +14,8 @@
     "express": "^4.18.2",
     "sequelize": "^6.32.0",
     "sqlite3": "^5.1.6",
-    "axios": "^1.6.2"
+    "axios": "^1.6.2",
+    "moment-timezone": "^0.5.40"
   },
   "engines": {
     "node": "18.x"
