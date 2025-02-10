@@ -13,6 +13,7 @@ import {
 import { Sequelize, DataTypes } from "sequelize";
 import axios from "axios";
 import dotenv from "dotenv";
+import moment from "moment-timezone"; // Biblioteca para formatar data/hora
 
 dotenv.config();
 
@@ -86,16 +87,20 @@ let keepAliveMessage;
 
 async function keep_alive_loop() {
     setInterval(async () => {
-        // Manter mensagem no canal de logs
         try {
             const channel = await client.channels.fetch(CHANNEL_KEEP_ALIVE).catch(console.error);
             if (channel) {
+                // Obtém a data e hora formatadas no fuso horário de Brasília
+                const dataHora = moment().tz("America/Sao_Paulo").format("DD/MM/YYYY HH:mm:ss");
+
+                const mensagem = `✅ **Bot funcionando perfeitamente!** 📅 **Data/Hora:** ${dataHora}`;
+
                 if (keepAliveMessage) {
-                    await keepAliveMessage.edit("✅ Bot ativo! (Keep-Alive)").catch(console.error);
+                    await keepAliveMessage.edit(mensagem).catch(console.error);
                 } else {
-                    keepAliveMessage = await channel.send("✅ Bot ativo! (Keep-Alive)").catch(console.error);
+                    keepAliveMessage = await channel.send(mensagem).catch(console.error);
                 }
-                console.log("✅ Keep-Alive enviado no Discord!");
+                console.log(`📌 Log atualizado no Discord: ${mensagem}`);
             }
         } catch (error) {
             console.error("❌ Erro ao enviar Keep-Alive no Discord:", error);
@@ -151,10 +156,8 @@ client.on("interactionCreate", async (interaction) => {
     if (interaction.isModalSubmit() && interaction.customId === "wl_form") {
         const nome = interaction.fields.getTextInputValue("nome");
         const id = interaction.fields.getTextInputValue("id");
-        const recrutadorNome =
-            interaction.fields.getTextInputValue("recrutadorNome");
-        const recrutadorId =
-            interaction.fields.getTextInputValue("recrutadorId");
+        const recrutadorNome = interaction.fields.getTextInputValue("recrutadorNome");
+        const recrutadorId = interaction.fields.getTextInputValue("recrutadorId");
         const user = interaction.user;
 
         await Whitelist.upsert({
@@ -171,11 +174,7 @@ client.on("interactionCreate", async (interaction) => {
         // Atribuir o cargo de Membro
         const role = guild.roles.cache.get(ROLE_MEMBER);
         if (role) {
-            await member.roles
-                .add(role)
-                .catch((err) =>
-                    console.error(`Erro ao adicionar cargo: ${err}`),
-                );
+            await member.roles.add(role).catch((err) => console.error(`Erro ao adicionar cargo: ${err}`));
         } else {
             console.error(`Cargo '${ROLE_MEMBER}' não encontrado!`);
         }
@@ -192,8 +191,7 @@ client.on("interactionCreate", async (interaction) => {
         }
 
         await interaction.reply({
-            content:
-                "✅ Whitelist enviada com sucesso! Cargo de Membro adicionado.",
+            content: "✅ Whitelist enviada com sucesso! Cargo de Membro adicionado.",
             ephemeral: true,
         });
     }
