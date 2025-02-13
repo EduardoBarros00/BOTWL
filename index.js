@@ -52,17 +52,107 @@ const Whitelist = sequelize.define("Whitelist", {
     recrutadorId: DataTypes.STRING,
 });
 
-// IDs dos cargos e canais
-const CHANNEL_WL_RESULTS = "1338158706810159134";
-const ROLE_MEMBER = "1336379079494205521";
-const ROLE_INITIAL = "1336514204575862825"; // Cargo que deve ser removido
-
 client.once("ready", async () => {
     await sequelize.sync();
     console.log(`✅ Bot online como ${client.user.tag}`);
+
+    // Enviar o botão de Whitelist automaticamente no canal correto
+    const channel = await client.channels.fetch("1338158040767139923").catch(console.error);
+    if (channel) {
+        const row = new ActionRowBuilder().addComponents(
+            new ButtonBuilder()
+                .setCustomId("start_wl")
+                .setLabel("📋 Iniciar Whitelist")
+                .setStyle(ButtonStyle.Primary),
+        );
+        await channel.send({
+            content: "**Clique no botão abaixo para iniciar a Whitelist!**",
+            components: [row],
+        });
+    }
+
+    // Iniciar o loop de Keep-Alive
+    keep_alive_loop();
 });
 
+// IDs dos canais e cargo
+const CHANNEL_WL_BUTTON = "1338158040767139923";
+const CHANNEL_WL_REQUESTS = "1338158041958191175";
+const CHANNEL_WL_RESULTS = "1338158706810159134";
+const CHANNEL_KEEP_ALIVE = "1338192023244509195"; // Canal para Keep-Alive
+const ROLE_MEMBER = "1336379079494205521";
+
+// Keep-Alive: Envia uma mensagem a cada 2 minutos no canal especificado e faz um ping HTTP para o próprio bot
+let keepAliveMessage;
+
+async function keep_alive_loop() {
+    setInterval(async () => {
+        try {
+            const channel = await client.channels.fetch(CHANNEL_KEEP_ALIVE).catch(console.error);
+            if (channel) {
+                // Obtém a data e hora formatadas no fuso horário de Brasília
+                const dataHora = moment().tz("America/Sao_Paulo").format("DD/MM/YYYY HH:mm:ss");
+
+                const mensagem = `✅ **Bot funcionando perfeitamente!** 📅 **Data/Hora:** ${dataHora}`;
+
+                if (keepAliveMessage) {
+                    await keepAliveMessage.edit(mensagem).catch(console.error);
+                } else {
+                    keepAliveMessage = await channel.send(mensagem).catch(console.error);
+                }
+                console.log(`📌 Log atualizado no Discord: ${mensagem}`);
+            }
+        } catch (error) {
+            console.error("❌ Erro ao enviar Keep-Alive no Discord:", error);
+        }
+
+        // Ping no próprio servidor para evitar hibernação no Render
+        axios.get("https://seu-bot.onrender.com/")
+            .then(() => console.log("🔄 Keep-Alive no Render funcionando!"))
+            .catch((err) => console.error("Erro no Keep-Alive HTTP:", err));
+
+    }, 120000); // A cada 2 minutos (120000 ms)
+}
+
 client.on("interactionCreate", async (interaction) => {
+    if (interaction.isButton() && interaction.customId === "start_wl") {
+        const modal = new ModalBuilder()
+            .setCustomId("wl_form")
+            .setTitle("Whitelist")
+            .addComponents(
+                new ActionRowBuilder().addComponents(
+                    new TextInputBuilder()
+                        .setCustomId("nome")
+                        .setLabel("Digite seu nome")
+                        .setStyle(TextInputStyle.Short)
+                        .setRequired(true),
+                ),
+                new ActionRowBuilder().addComponents(
+                    new TextInputBuilder()
+                        .setCustomId("id")
+                        .setLabel("Digite seu ID")
+                        .setStyle(TextInputStyle.Short)
+                        .setRequired(true),
+                ),
+                new ActionRowBuilder().addComponents(
+                    new TextInputBuilder()
+                        .setCustomId("recrutadorNome")
+                        .setLabel("Nome do Recrutador")
+                        .setStyle(TextInputStyle.Short)
+                        .setRequired(true),
+                ),
+                new ActionRowBuilder().addComponents(
+                    new TextInputBuilder()
+                        .setCustomId("recrutadorId")
+                        .setLabel("ID do Recrutador")
+                        .setStyle(TextInputStyle.Short)
+                        .setRequired(true),
+                ),
+            );
+
+        await interaction.showModal(modal);
+    }
+
     if (interaction.isModalSubmit() && interaction.customId === "wl_form") {
         const nome = interaction.fields.getTextInputValue("nome");
         const id = interaction.fields.getTextInputValue("id");
@@ -89,14 +179,6 @@ client.on("interactionCreate", async (interaction) => {
             console.error(`Cargo '${ROLE_MEMBER}' não encontrado!`);
         }
 
-        // Remover o cargo inicial se o usuário o possuir
-        const initialRole = guild.roles.cache.get(ROLE_INITIAL);
-        if (initialRole && member.roles.cache.has(ROLE_INITIAL)) {
-            await member.roles.remove(initialRole).then(() => {
-                console.log(`✅ Cargo inicial removido de ${member.user.tag}`);
-            }).catch((err) => console.error(`❌ Erro ao remover cargo inicial:`, err));
-        }
-
         // Alterar o nome do usuário
         await member.setNickname(`${nome} | ${id}`).catch(console.error);
 
@@ -109,24 +191,9 @@ client.on("interactionCreate", async (interaction) => {
         }
 
         await interaction.reply({
-            content: "✅ Whitelist enviada com sucesso! Cargo de Membro adicionado e cargo inicial removido.",
+            content: "✅ Whitelist enviada com sucesso! Cargo de Membro adicionado.",
             ephemeral: true,
         });
-    }
-});
-
-// Verifica se membros com ROLE_MEMBER ainda possuem ROLE_INITIAL e remove
-client.on("guildMemberUpdate", async (oldMember, newMember) => {
-    try {
-        if (newMember.roles.cache.has(ROLE_MEMBER) && newMember.roles.cache.has(ROLE_INITIAL)) {
-            const roleToRemove = newMember.guild.roles.cache.get(ROLE_INITIAL);
-            if (roleToRemove) {
-                await newMember.roles.remove(roleToRemove);
-                console.log(`✅ Cargo inicial removido de ${newMember.user.tag}`);
-            }
-        }
-    } catch (error) {
-        console.error("❌ Erro ao remover cargo inicial em atualização:", error);
     }
 });
 
