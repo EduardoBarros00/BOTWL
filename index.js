@@ -52,63 +52,81 @@ const Whitelist = sequelize.define("Whitelist", {
     recrutadorId: DataTypes.STRING,
 });
 
-// Mapeamento de cargos e iniciais
-const rolePrefixes = {
-    "1281863970676019253": "[REC]",
-    "1336412910582366349": "🎯[Resp.Elite]",
-    "1336379564766527582": "🏅[G.G]",
-    "1336410539663949935": "🎯[ELITE]",
-    "1336379726675050537": "🥇[Sub]",
-};
+// IDs dos cargos e canais
+const CHANNEL_WL_RESULTS = "1338158706810159134";
+const ROLE_MEMBER = "1336379079494205521";
+const ROLE_INITIAL = "1336514204575862825"; // Cargo que deve ser removido
 
 client.once("ready", async () => {
     await sequelize.sync();
     console.log(`✅ Bot online como ${client.user.tag}`);
+});
 
-    // Enviar o botão de Whitelist automaticamente no canal correto
-    const channel = await client.channels.fetch("1338158040767139923").catch(console.error);
-    if (channel) {
-        const row = new ActionRowBuilder().addComponents(
-            new ButtonBuilder()
-                .setCustomId("start_wl")
-                .setLabel("📋 Iniciar Whitelist")
-                .setStyle(ButtonStyle.Primary),
-        );
-        await channel.send({
-            content: "**Clique no botão abaixo para iniciar a Whitelist!**",
-            components: [row],
+client.on("interactionCreate", async (interaction) => {
+    if (interaction.isModalSubmit() && interaction.customId === "wl_form") {
+        const nome = interaction.fields.getTextInputValue("nome");
+        const id = interaction.fields.getTextInputValue("id");
+        const recrutadorNome = interaction.fields.getTextInputValue("recrutadorNome");
+        const recrutadorId = interaction.fields.getTextInputValue("recrutadorId");
+        const user = interaction.user;
+
+        await Whitelist.upsert({
+            userId: user.id,
+            nome,
+            id,
+            recrutadorNome,
+            recrutadorId,
+        });
+
+        const guild = interaction.guild;
+        const member = await guild.members.fetch(user.id);
+
+        // Atribuir o cargo de Membro
+        const role = guild.roles.cache.get(ROLE_MEMBER);
+        if (role) {
+            await member.roles.add(role).catch((err) => console.error(`Erro ao adicionar cargo: ${err}`));
+        } else {
+            console.error(`Cargo '${ROLE_MEMBER}' não encontrado!`);
+        }
+
+        // Remover o cargo inicial se o usuário o possuir
+        const initialRole = guild.roles.cache.get(ROLE_INITIAL);
+        if (initialRole && member.roles.cache.has(ROLE_INITIAL)) {
+            await member.roles.remove(initialRole).then(() => {
+                console.log(`✅ Cargo inicial removido de ${member.user.tag}`);
+            }).catch((err) => console.error(`❌ Erro ao remover cargo inicial:`, err));
+        }
+
+        // Alterar o nome do usuário
+        await member.setNickname(`${nome} | ${id}`).catch(console.error);
+
+        // Enviar resultado
+        const resultsChannel = guild.channels.cache.get(CHANNEL_WL_RESULTS);
+        if (resultsChannel) {
+            await resultsChannel.send(
+                `✅ ${user} foi aprovado na WL! Nome: **${nome}** | ID: **${id}** | Recrutador: **${recrutadorNome}** (ID: ${recrutadorId})`,
+            );
+        }
+
+        await interaction.reply({
+            content: "✅ Whitelist enviada com sucesso! Cargo de Membro adicionado e cargo inicial removido.",
+            ephemeral: true,
         });
     }
 });
 
-// Evento para detectar mudanças de cargo e atualizar o apelido
+// Verifica se membros com ROLE_MEMBER ainda possuem ROLE_INITIAL e remove
 client.on("guildMemberUpdate", async (oldMember, newMember) => {
     try {
-        const userId = newMember.id;
-        const whitelistEntry = await Whitelist.findOne({ where: { userId } });
-
-        if (!whitelistEntry) return; // Se o usuário não estiver na WL, não faz nada
-
-        let highestRole = null;
-        let highestPrefix = "";
-
-        // Verifica qual é o cargo mais alto do usuário com base na lista de iniciais
-        newMember.roles.cache.forEach((role) => {
-            if (rolePrefixes[role.id]) {
-                highestRole = role;
-                highestPrefix = rolePrefixes[role.id];
+        if (newMember.roles.cache.has(ROLE_MEMBER) && newMember.roles.cache.has(ROLE_INITIAL)) {
+            const roleToRemove = newMember.guild.roles.cache.get(ROLE_INITIAL);
+            if (roleToRemove) {
+                await newMember.roles.remove(roleToRemove);
+                console.log(`✅ Cargo inicial removido de ${newMember.user.tag}`);
             }
-        });
-
-        // Atualiza o apelido com a inicial do cargo
-        const newNickname = highestRole
-            ? `${highestPrefix} ${whitelistEntry.nome} | ${whitelistEntry.id}`
-            : `${whitelistEntry.nome} | ${whitelistEntry.id}`;
-
-        await newMember.setNickname(newNickname).catch(console.error);
-        console.log(`🔄 Apelido atualizado para: ${newNickname}`);
+        }
     } catch (error) {
-        console.error("❌ Erro ao atualizar apelido:", error);
+        console.error("❌ Erro ao remover cargo inicial em atualização:", error);
     }
 });
 
